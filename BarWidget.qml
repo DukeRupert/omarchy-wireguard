@@ -279,6 +279,11 @@ fi
 
   // ------------------------------------------------------------- bar button
 
+  // The bar sizes each slot from its root item's implicitWidth; without this the
+  // widget loads and answers IPC but occupies zero pixels.
+  implicitWidth: button.implicitWidth
+  implicitHeight: button.implicitHeight
+
   BarIconButton {
     id: button
     anchors.fill: parent
