@@ -12,7 +12,7 @@ throughput — using only information a normal user can read.
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/dukerupert/omarchy-wireguard.git --enable
+omarchy plugin add https://github.com/DukeRupert/omarchy-wireguard.git --enable
 ```
 
 Requires Omarchy 4 (Quattro) or later, for the Quickshell plugin host.
