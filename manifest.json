@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.dukerupert.wireguard",
+  "name": "WireGuard",
+  "version": "1.0.0",
+  "author": "Logan <logan@fireflysoftware.dev>",
+  "license": "MIT",
+  "description": "WireGuard toggle and tunnel statistics in the Omarchy bar, driven by NetworkManager.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "WireGuard",
+    "description": "Tunnel state in the bar; endpoint, routes, and transfer stats in a popup.",
+    "category": "Network",
+    "aliases": [
+      "wireguard",
+      "wg",
+      "vpn"
+    ],
+    "allowMultiple": true,
+    "defaultSection": "right",
+    "defaults": {
+      "connectionName": "",
+      "refreshIntervalSec": 30,
+      "pingTarget": ""
+    },
+    "schema": [
+      {
+        "key": "connectionName",
+        "type": "string",
+        "label": "NetworkManager connection",
+        "defaultValue": "",
+        "description": "Name of the WireGuard connection profile, as shown by `nmcli connection show`. Leave empty to use whichever WireGuard connection exists — set it only when you have more than one."
+      },
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Fallback poll interval (seconds)",
+        "min": 5,
+        "max": 300,
+        "step": 1,
+        "defaultValue": 30,
+        "description": "State changes arrive instantly via `nmcli monitor`; this is the safety-net poll, and the sampling rate for live throughput while the panel is open."
+      },
+      {
+        "key": "pingTarget",
+        "type": "string",
+        "label": "Latency probe address",
+        "defaultValue": "",
+        "description": "Address pinged while the panel is open to measure round-trip time through the tunnel — usually the server's VPN address, e.g. 10.0.0.1. Empty (the default) hides the latency row."
+      }
+    ]
+  }
+}

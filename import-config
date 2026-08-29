@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# Imports a WireGuard .conf into NetworkManager, so the bar widget has something
+# to toggle. Runs in a terminal rather than inside the shell process: the import
+# raises a polkit prompt, and picking a file wants a real UI.
+#
+# Usage: import-config [path/to/tunnel.conf]
+# With no argument it opens a picker.
+
+set -uo pipefail
+
+die() { gum style --foreground 1 "✗ $*"; read -rsn1 -p "Press any key to close."; exit 1; }
+
+gum style --border rounded --padding "0 2" --margin "1 0" \
+  --border-foreground 6 "WireGuard → NetworkManager"
+
+CONF="${1:-}"
+if [[ -z $CONF ]]; then
+  start="$HOME"
+  for candidate in "$HOME/Downloads" "$HOME/Documents"; do
+    [[ -d $candidate ]] && { start="$candidate"; break; }
+  done
+  gum style --faint "Pick a .conf file — esc to cancel."
+  CONF=$(gum file --file --height 15 "$start") || exit 0
+fi
+
+[[ -n $CONF && -f $CONF ]] || die "No file selected."
+[[ -r $CONF ]] || die "Cannot read $CONF."
+
+# A WireGuard config without these is either the server side or not a tunnel at
+# all; importing it would create a profile that can never connect.
+grep -qi '^\[Interface\]' "$CONF" || die "$(basename "$CONF") has no [Interface] section."
+grep -qi '^\[Peer\]' "$CONF" || die "$(basename "$CONF") has no [Peer] section — is this a server config?"
+
+# NetworkManager names the profile after the file, and silently refuses a name
+# that is already taken, so ask before clobbering.
+NAME=$(basename "$CONF"); NAME="${NAME%.conf}"
+if nmcli -g connection.id connection show "$NAME" >/dev/null 2>&1; then
+  gum style --foreground 3 "A connection named “$NAME” already exists."
+  gum confirm "Replace it?" || { gum style --faint "Left alone."; read -rsn1 -p "Press any key to close."; exit 0; }
+  nmcli connection delete "$NAME" >/dev/null || die "Could not remove the existing “$NAME”."
+fi
+
+# wg-quick honours directives NetworkManager does not. Say so rather than let
+# the tunnel come up quietly missing a killswitch or a custom routing table.
+IGNORED=$(grep -ioE '^(PostUp|PostDown|PreUp|PreDown|Table|SaveConfig)' "$CONF" | sort -u | paste -sd", " -)
+if [[ -n $IGNORED ]]; then
+  gum style --foreground 3 "Note: NetworkManager ignores $IGNORED from this file."
+  gum confirm "Import anyway?" || { read -rsn1 -p "Press any key to close."; exit 0; }
+fi
+
+gum style --faint "Importing — authenticate if prompted."
+nmcli connection import type wireguard file "$CONF" || die "Import failed."
+
+if gum confirm "Connect automatically at boot?" --default=no; then
+  nmcli connection modify "$NAME" connection.autoconnect yes
+else
+  nmcli connection modify "$NAME" connection.autoconnect no
+fi
+
+gum style --foreground 2 "✓ Imported “$NAME”."
+gum style --faint "The bar widget picks it up immediately. Click the icon to connect."
+read -rsn1 -p "Press any key to close."
