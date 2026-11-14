@@ -54,7 +54,7 @@ function usableAddresses(raw) {
 function parsePoll(text) {
   var state = {
     known: false, connected: false, name: "", uuid: "", device: "",
-    addresses4: [], addresses6: [], peers: [],
+    addresses4: [], addresses6: [], peers: [], profiles: [],
     rx: -1, tx: -1
   }
   var lines = String(text || "").split("\n")
@@ -71,10 +71,24 @@ function parsePoll(text) {
     else if (key === "address4") state.addresses4 = usableAddresses(value)
     else if (key === "address6") state.addresses6 = usableAddresses(value)
     else if (key === "peer") { var p = parsePeer(value); if (p) state.peers.push(p) }
+    else if (key === "profile") {
+      var tab = value.indexOf("\t")
+      if (tab > 0) state.profiles.push({ uuid: value.substring(0, tab), name: value.substring(tab + 1) })
+    }
     else if (key === "rx") state.rx = Number(value)
     else if (key === "tx") state.tx = Number(value)
   }
   return state
+}
+
+// The profile after the current one, wrapping, so repeated swaps cycle through
+// every mode. Null when there is nothing to swap to.
+function nextProfile(profiles, currentUuid) {
+  if (!profiles || profiles.length < 2) return null
+  for (var i = 0; i < profiles.length; i++) {
+    if (profiles[i].uuid === currentUuid) return profiles[(i + 1) % profiles.length]
+  }
+  return profiles[0]
 }
 
 function routeSummary(peers) {

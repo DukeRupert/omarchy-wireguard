@@ -24,7 +24,7 @@ Requires Omarchy 4 (Quattro) or later, for the Quickshell plugin host.
 | **Left click** | open the panel |
 | **Right click** | connect or disconnect |
 | **Middle click** | force a refresh |
-| **In the panel** | `t` toggle · `r` refresh · `esc` close |
+| **In the panel** | `t` toggle · `s` switch profile · `r` refresh · `esc` close |
 
 The icon is dimmed while the tunnel is down. Hovering names the connection and
 its state.
@@ -68,6 +68,22 @@ configs use none of them. If yours does, reproduce them as NetworkManager
 properties (`ipv4.dns`, `ipv4.never-default`, dispatcher scripts) before
 switching. The import flow tells you when this applies to your file.
 
+## Full and split modes
+
+Two NetworkManager profiles with the same interface name — a full tunnel and a
+split one, say — are treated as two modes of one tunnel. Only one can be up at a
+time, so the widget follows whichever is active, and the panel shows a ⇄ button
+(`s`) that switches to the next one. NetworkManager takes the current profile
+down by itself, so the switch is one step. `connectionName` picks the mode a
+plain connect brings up.
+
+```bash
+nmcli connection clone wg0 wg0-split
+nmcli connection modify wg0-split \
+  wireguard.peers "<pubkey> allowed-ips=10.0.0.0/24 endpoint=vpn.example.com:51820" \
+  wireguard.ip4-auto-default-route 0 wireguard.ip6-auto-default-route 0
+```
+
 ## Settings
 
 | Key | Default | Meaning |
@@ -87,6 +103,7 @@ The widget registers an IPC target, so any action can go on a Hyprland bind:
 omarchy-shell wireguard toggle       # connect or disconnect
 omarchy-shell wireguard connect
 omarchy-shell wireguard disconnect
+omarchy-shell wireguard swap         # switch to the next profile on this interface
 omarchy-shell wireguard status       # prints the current state
 omarchy-shell wireguard panel        # open or close the panel
 omarchy-shell wireguard refresh

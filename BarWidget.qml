@@ -55,6 +55,10 @@ Panel {
   property var addresses4: []
   property var addresses6: []
   property var peers: []
+  // Every profile on this tunnel's interface, current one included, in nmcli's
+  // order. More than one means the panel offers a swap.
+  property var profiles: []
+  readonly property var nextProfile: Model.nextProfile(profiles, uuid)
 
   property real rxBytes: -1
   property real txBytes: -1
@@ -100,6 +104,16 @@ Panel {
     if (busy || !known || uuid === "") return
     busy = true
     toggleProc.command = ["nmcli", "connection", connected ? "down" : "up", "uuid", uuid]
+    toggleProc.running = true
+  }
+
+  // Bringing up a sibling profile is the whole swap: NetworkManager takes the
+  // current one off the shared interface by itself. From disconnected, it
+  // connects straight into the other mode.
+  function swapProfile() {
+    if (busy || !known || !nextProfile) return
+    busy = true
+    toggleProc.command = ["nmcli", "connection", "up", "uuid", nextProfile.uuid]
     toggleProc.running = true
   }
 
@@ -158,6 +172,20 @@ else
   u=$(nmcli -t -f TYPE,UUID connection show 2>/dev/null | sed -n "s/^wireguard://p" | head -1)
 fi
 [ -n "$u" ] || { echo "known=0"; exit 0; }
+# Profiles that share an interface name are modes of one tunnel (full and split,
+# say): only one can be up, and NetworkManager swaps them when another comes up.
+# Follow whichever is active, so a swap never leaves the widget showing the
+# profile that just went down.
+i=$(nmcli -g connection.interface-name connection show uuid "$u" 2>/dev/null)
+if [ -n "$i" ]; then
+  for x in $(nmcli -t -f TYPE,UUID connection show 2>/dev/null | sed -n "s/^wireguard://p"); do
+    [ "$(nmcli -g connection.interface-name connection show uuid "$x" 2>/dev/null)" = "$i" ] || continue
+    printf "profile=%s\t%s\n" "$x" "$(nmcli -g connection.id connection show uuid "$x" 2>/dev/null)"
+    case "$(nmcli -g GENERAL.STATE connection show uuid "$x" 2>/dev/null)" in
+      activat*) u="$x" ;;
+    esac
+  done
+fi
 echo "known=1"
 echo "uuid=$u"
 echo "name=$(nmcli -g connection.id connection show uuid "$u" 2>/dev/null)"
@@ -192,6 +220,7 @@ fi
         root.addresses4 = next.addresses4
         root.addresses6 = next.addresses6
         root.peers = next.peers
+        root.profiles = next.profiles
         if (next.rx >= 0 && next.tx >= 0) root.sampleCounters(next.rx, next.tx)
       }
     }
@@ -268,6 +297,7 @@ fi
     target: "wireguard"
 
     function toggle(): void { root.toggleConnection() }
+    function swap(): void { root.swapProfile() }
     function connect(): void { if (!root.connected) root.toggleConnection() }
     function disconnect(): void { if (root.connected) root.toggleConnection() }
     function refresh(): void { root.refresh() }
@@ -323,6 +353,7 @@ fi
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) {
         if (t === "t" || t === "T") root.toggleConnection()
+        else if (t === "s" || t === "S") root.swapProfile()
         else if (t === "r" || t === "R") root.refresh()
       }
 
@@ -359,14 +390,26 @@ fi
               }
             }
             trailingControl: Component {
-              PanelActionButton {
-                iconText: "󰐥"
-                tooltipText: root.connected ? "Disconnect" : "Connect"
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                enabled: !root.busy
-                visible: root.known
-                onClicked: root.toggleConnection()
+              Row {
+                spacing: Style.space(4)
+                PanelActionButton {
+                  iconText: "󰓡"
+                  tooltipText: root.nextProfile ? "Switch to " + root.nextProfile.name : ""
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                  enabled: !root.busy
+                  visible: root.known && root.nextProfile !== null
+                  onClicked: root.swapProfile()
+                }
+                PanelActionButton {
+                  iconText: "󰐥"
+                  tooltipText: root.connected ? "Disconnect" : "Connect"
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                  enabled: !root.busy
+                  visible: root.known
+                  onClicked: root.toggleConnection()
+                }
               }
             }
           }
@@ -513,7 +556,9 @@ fi
           Text {
             width: parent.width
             visible: root.known
-            text: "t toggle · r refresh · esc close"
+            text: root.nextProfile
+              ? "t toggle · s switch to " + root.nextProfile.name + " · r refresh · esc close"
+              : "t toggle · r refresh · esc close"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption

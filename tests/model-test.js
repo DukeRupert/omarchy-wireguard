@@ -5,7 +5,7 @@ const path = require("path")
 const src = fs.readFileSync(path.join(__dirname, "..", "Model.js"), "utf8")
   .replace(/^\.pragma library\s*$/m, "")
 const M = {}
-new Function("exports", src + "\n;Object.assign(exports,{parsePeer,isFullTunnel,usableAddresses,parsePoll,routeSummary,formatBytes,formatRate,shortKey,unescapeTerse})")(M)
+new Function("exports", src + "\n;Object.assign(exports,{parsePeer,isFullTunnel,usableAddresses,parsePoll,routeSummary,nextProfile,formatBytes,formatRate,shortKey,unescapeTerse})")(M)
 
 let failed = 0
 function eq(label, actual, expected) {
@@ -73,6 +73,18 @@ eq("rate zero", M.formatRate(0), "0 bps")
 eq("rate Kbps", M.formatRate(2125), "17 Kbps")
 eq("rate negative -> dash", M.formatRate(-1), "—")
 eq("shortKey truncates", M.shortKey("dqK72drYiE3NHgzrmx3U9LDTp0fOkQHi6qb19mX3FX4="), "dqK72drY…")
+
+// --- profiles sharing one interface (full + split modes) ------------------
+const modes = M.parsePoll([
+  "known=1", "uuid=bbbb", "state=activated",
+  "profile=aaaa\twg0", "profile=bbbb\twg0-split",
+].join("\n"))
+eq("modes: parsed", modes.profiles, [{ uuid: "aaaa", name: "wg0" }, { uuid: "bbbb", name: "wg0-split" }])
+eq("modes: next wraps", M.nextProfile(modes.profiles, "bbbb").name, "wg0")
+eq("modes: next forward", M.nextProfile(modes.profiles, "aaaa").name, "wg0-split")
+eq("modes: three cycle", M.nextProfile([{uuid:"a"},{uuid:"b"},{uuid:"c"}], "b").uuid, "c")
+eq("modes: single profile has no swap", M.nextProfile([{ uuid: "aaaa", name: "wg0" }], "aaaa"), null)
+eq("modes: none listed", M.parsePoll("known=1").profiles, [])
 
 console.log(failed ? `\n${failed} FAILED` : "\nall passed")
 process.exit(failed ? 1 : 0)
